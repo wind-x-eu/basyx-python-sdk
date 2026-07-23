@@ -1,0 +1,57 @@
+{{- $root := . -}}
+{{- range $name, $comp := .Values.components }}
+{{- if $comp.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "basyx.componentName" (dict "root" $root "name" $name) }}
+  labels:
+    {{- include "basyx.labels" (dict "root" $root "name" $name) | nindent 4 }}
+spec:
+  replicas: {{ $comp.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "basyx.selectorLabels" (dict "root" $root "name" $name) | nindent 6 }}
+  strategy:
+    # Object stores aren't thread-safe yet and the PVC is RWO, so recreate on update.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "basyx.selectorLabels" (dict "root" $root "name" $name) | nindent 8 }}
+    spec:
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: "{{ $comp.image }}:{{ $comp.tag | default $root.Values.global.imageTag }}"
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          {{- with $comp.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml $root.Values.defaultProbes.liveness | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $root.Values.defaultProbes.readiness | nindent 12 }}
+          resources:
+            {{- toYaml ($comp.resources | default $root.Values.defaultResources) | nindent 12 }}
+          {{- if and $comp.persistence $comp.persistence.enabled }}
+          volumeMounts:
+            - name: storage
+              mountPath: {{ $comp.persistence.mountPath }}
+          {{- end }}
+      {{- if and $comp.persistence $comp.persistence.enabled }}
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "basyx.pvcName" (dict "root" $root "name" $name "comp" $comp) }}
+      {{- end }}
+{{- end }}
+{{- end }}

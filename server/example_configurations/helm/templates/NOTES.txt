@@ -1,0 +1,32 @@
+BaSyx AAS Server ist deployed (Namespace: {{ .Release.Namespace }}).
+
+Komponenten und URLs:
+{{- range $name, $comp := .Values.components }}
+{{- if $comp.enabled }}
+{{- if and $.Values.ingress.enabled $comp.host }}
+  - {{ printf "%-11s" $name }} https://{{ $comp.host }}/api/v3.1/
+{{- else }}
+  - {{ printf "%-11s" $name }} (kein Ingress) svc/{{ include "basyx.componentName" (dict "root" $ "name" $name) }}:{{ $.Values.service.port }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+Die TLS-Zertifikate stellt cert-manager via ClusterIssuer "{{ .Values.ingress.clusterIssuer }}" aus.
+Status prüfen (pro Host ein Zertifikat):
+
+  kubectl -n {{ .Release.Namespace }} get certificate
+
+DNS: alle Hosts oben müssen auf die IP des nginx-Ingress-Controllers zeigen.
+
+Smoke-Tests:
+{{- range $name, $comp := .Values.components }}
+{{- if and $comp.enabled $.Values.ingress.enabled $comp.host }}
+{{- if eq $name "repository" }}
+  curl https://{{ $comp.host }}/api/v3.1/shells
+{{- else if eq $name "registry" }}
+  curl https://{{ $comp.host }}/api/v3.1/shell-descriptors
+{{- else if eq $name "discovery" }}
+  curl https://{{ $comp.host }}/api/v3.1/lookup/shells
+{{- end }}
+{{- end }}
+{{- end }}

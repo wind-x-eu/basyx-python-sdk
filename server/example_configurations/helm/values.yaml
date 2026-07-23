@@ -1,0 +1,118 @@
+# Default values for the basyx-aas-server chart.
+#
+# Deploys the three BaSyx Python server components (repository, registry, discovery)
+# as separate Deployments/Services and exposes each one under its OWN subdomain via
+# an nginx ingress with a Let's Encrypt (cert-manager) TLS certificate.
+#
+# All three components share the API base path /api/v3.1/ but serve different
+# resources, so they must NOT share a host. Separate hosts keep the standard base
+# path and give each service its own certificate.
+
+# Settings shared by all components.
+global:
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+
+# Pull secret(s) if the GHCR packages are private, e.g.:
+# imagePullSecrets:
+#   - name: ghcr-pull-secret
+imagePullSecrets: []
+
+# Ingress defaults shared by all component ingresses.
+ingress:
+  enabled: true
+  className: nginx
+  # cert-manager ClusterIssuer that issues the Let's Encrypt certificates.
+  clusterIssuer: letsencrypt-prod
+  path: /
+  pathType: Prefix
+  extraAnnotations:
+    # Must be >= NGINX_MAX_UPLOAD so large AASX uploads pass the ingress too.
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+
+# Default resource requests/limits; a component may override with its own `resources`.
+defaultResources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+# TCP probes against the nginx listener (the servers have no dedicated health path).
+defaultProbes:
+  liveness:
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readiness:
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# ---------------------------------------------------------------------------
+# Components. Each becomes its own Deployment + Service + Ingress (+ PVC).
+# `env` is passed verbatim to the container, so the differing variables between
+# repository/registry (STORAGE_PERSISTENCY) and discovery (storage_path) are explicit.
+# ---------------------------------------------------------------------------
+components:
+
+  repository:
+    enabled: true
+    # Image built by .github/workflows/build-and-publish-ghcr.yaml
+    image: ghcr.io/wind-x-eu/basyx-python-repository
+    # tag: latest        # optional per-component override of global.imageTag
+    host: aas-windx.cluster.swms-cloud.com
+    tlsSecretName: basyx-repository-tls
+    persistence:
+      enabled: true
+      # existingClaim: ""
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 2Gi
+      mountPath: /storage
+    env:
+      - { name: API_BASE_PATH, value: "/api/v3.1/" }
+      - { name: STORAGE, value: "/storage" }
+      - { name: STORAGE_PERSISTENCY, value: "true" }
+      - { name: STORAGE_OVERWRITE, value: "false" }
+      - { name: NGINX_MAX_UPLOAD, value: "16M" }
+
+  registry:
+    enabled: true
+    image: ghcr.io/wind-x-eu/basyx-python-registry
+    host: registry-aas-windx.cluster.swms-cloud.com
+    tlsSecretName: basyx-registry-tls
+    persistence:
+      enabled: true
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 1Gi
+      mountPath: /storage
+    env:
+      - { name: API_BASE_PATH, value: "/api/v3.1/" }
+      - { name: STORAGE, value: "/storage" }
+      - { name: STORAGE_PERSISTENCY, value: "true" }
+      - { name: STORAGE_OVERWRITE, value: "false" }
+
+  discovery:
+    enabled: true
+    image: ghcr.io/wind-x-eu/basyx-python-discovery
+    host: discovery-aas-windx.cluster.swms-cloud.com
+    tlsSecretName: basyx-discovery-tls
+    persistence:
+      enabled: true
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 1Gi
+      mountPath: /storage
+    # Discovery persists only if `storage_path` points to a file (see run_discovery.py).
+    env:
+      - { name: API_BASE_PATH, value: "/api/v3.1/" }
+      - { name: storage_path, value: "/storage/discovery_store.json" }
+
+service:
+  type: ClusterIP
+  port: 80

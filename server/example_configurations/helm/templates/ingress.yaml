@@ -1,0 +1,36 @@
+{{- $root := . -}}
+{{- if .Values.ingress.enabled }}
+{{- range $name, $comp := .Values.components }}
+{{- if and $comp.enabled $comp.host }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "basyx.componentName" (dict "root" $root "name" $name) }}
+  labels:
+    {{- include "basyx.labels" (dict "root" $root "name" $name) | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ $root.Values.ingress.clusterIssuer | quote }}
+    {{- with $root.Values.ingress.extraAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $root.Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ $comp.host | quote }}
+      secretName: {{ $comp.tlsSecretName | quote }}
+  rules:
+    - host: {{ $comp.host | quote }}
+      http:
+        paths:
+          - path: {{ $root.Values.ingress.path }}
+            pathType: {{ $root.Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "basyx.componentName" (dict "root" $root "name" $name) }}
+                port:
+                  number: {{ $root.Values.service.port }}
+{{- end }}
+{{- end }}
+{{- end }}

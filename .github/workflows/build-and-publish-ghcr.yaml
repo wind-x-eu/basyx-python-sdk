@@ -3,10 +3,10 @@ name: "Build and publish BaSyx server images to GHCR"
 run-name: "Build and publish BaSyx server images to GHCR from ${{ github.ref_name }}"
 
 on:
-  # Automatischer Build bei jedem Push auf main und bei Tags (z.B. v1.0.0)
+  # Automatischer Build bei jedem Push auf develop (Default-Branch) und bei Tags (z.B. v1.0.0)
   push:
     branches:
-      - main
+      - develop
     tags:
       - "v*"
     paths:
@@ -103,6 +103,6 @@ jobs:
           context: .
           file: ./server/docker/${{ matrix.variant.dir }}/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

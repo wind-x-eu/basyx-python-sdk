@@ -1,0 +1,21 @@
+{{- $root := . -}}
+{{- range $name, $comp := .Values.components }}
+{{- if and $comp.enabled $comp.persistence $comp.persistence.enabled (not $comp.persistence.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "basyx.pvcName" (dict "root" $root "name" $name "comp" $comp) }}
+  labels:
+    {{- include "basyx.labels" (dict "root" $root "name" $name) | nindent 4 }}
+spec:
+  accessModes:
+    - {{ $comp.persistence.accessMode | default "ReadWriteOnce" | quote }}
+  resources:
+    requests:
+      storage: {{ $comp.persistence.size | quote }}
+  {{- if $comp.persistence.storageClass }}
+  storageClassName: {{ $comp.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

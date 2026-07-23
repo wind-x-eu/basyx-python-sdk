@@ -1,0 +1,14 @@
+apiVersion: v2
+name: basyx-aas-server
+description: BaSyx Python AAS Repository HTTP server with nginx ingress and Let's Encrypt TLS
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - aas
+  - asset-administration-shell
+  - basyx
+  - repository
+home: https://github.com/wind-x-eu/basyx-python-sdk/tree/main/server
+sources:
+  - https://github.com/wind-x-eu/basyx-python-sdk
